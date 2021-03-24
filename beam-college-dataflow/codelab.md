@@ -366,6 +366,64 @@ genericRecords.apply(FileIO.<GenericRecord>write()
 As the argument to `ParquetIO.sink()` you should pass `avroSchema`, that you converted before from 
 Beam Schema. Destination path, you may take from the pipeline options.
 
+Next step: You should check your tokenization service
+
+<!-- ------------------------ -->
+## Tokenization service
+Duration: 0:05:00
+
+Presented templates provides data tokenization using external REST service 
+and configured to communicate with tokenization service in following request format: 
+```json
+{
+  ...
+  "data":[
+    {"<key>":"<value>", ...},
+    {"<key>":"<value>", ...},
+    {"<key>":"<value>", ...},
+    ...
+  ]
+  ...
+}
+```
+If your tokenization service have similar requirements for request structure, just skip this codelab 
+section.
+
+#### If you don't have tokenization service
+To skip the tokenization step for testing purposes you need to replace the tokenization call in 
+`ProtegrityDataProtectors`
+
+1. Go to `v2/protegrity-data-tokenization/src/main/java/com/google/cloud/teleport/v2/transforms/ProtegrityDataProtectors.java`
+2. Find processBufferedRows method
+3. Replace
+```java
+private void processBufferedRows(Iterable<Row> rows, WindowedContext context) {
+
+    try {
+      for (Row outputRow : getTokenizedRow(rows)) {
+        context.output(outputRow);
+      }
+    } catch (Exception e) {
+      for (Row outputRow : rows) {
+        context.output(
+            failureTag,
+            FailsafeElement.of(outputRow, outputRow)
+                .setErrorMessage(e.getMessage())
+                .setStacktrace(Throwables.getStackTraceAsString(e)));
+      }
+
+    }
+}
+```
+with
+```java
+private void processBufferedRows(Iterable<Row> rows, WindowedContext context) {
+  for (Row outputRow : rows) {
+    context.output(row);
+  }
+    
+}
+```
 Next step: You will take a look on metadata file and extend it for parquet format.
 
 <!-- ------------------------ -->
@@ -492,9 +550,113 @@ gcloud dataflow flex-template build ${TEMPLATE_PATH} \
 Next step: You will run Dataflow Template on GCS!
 <!-- ------------------------ -->
 ## Run the Template
-Duration: 0:05:00
+Duration: 0:10:00
 
-pass
+To deploy the pipeline, refer to the template file and pass the
+[parameters](https://cloud.google.com/dataflow/docs/guides/specifying-exec-params#setting-other-cloud-dataflow-pipeline-options)
+required by the pipeline.
+
+The template requires banch of the parameters, in case of testing parquet format as an input source
+you need to specify few of them.
+
+- **dataSchemaGcsPath**: Path to data schema file located on GCS. BigQuery compatible JSON format data schema required 
+- **inputGcsFilePattern**: GCS file pattern for files in the source bucket
+- **inputGcsFileFormat**: File format of the input files. Supported formats: JSON, CSV, Avro and **PARQUET**
+- **dsgUri**: URI for the DSG API calls, if you don't have this one. Just skip it.
+- **outputGcsDirectory**: GCS bucket folder to write data to
+- **outputGcsFileFormat**: File format of output files. Supported formats: JSON, CSV, Avro and **PARQUET**
+
+
+<details>
+  <summary>Full list of the parameters</summary>
+  
+- Data schema
+    - **dataSchemaGcsPath**: Path to data schema file located on GCS. BigQuery compatible JSON format data schema required
+- An input source from the supported options:
+    - Google Cloud Storage
+        - **inputGcsFilePattern**: GCS file pattern for files in the source bucket
+        - **inputGcsFileFormat**: File format of the input files. Supported formats: JSON, CSV, Avro and **PARQUET**
+        - CSV format parameters:
+            - **csvContainsHeaders**: `true` if CSV file(s) in the input bucket contain headers, and `false` otherwise
+            - **csvDelimiter**: Delimiting character in CSV. Default: delimiter provided in csvFormat
+            - **csvFormat**: CSV format according to Apache Commons CSV format. Default is:
+              [Apache Commons CSV default](https://static.javadoc.io/org.apache.commons/commons-csv/1.7/org/apache/commons/csv/CSVFormat.html#DEFAULT)
+              . Must match format names exactly found
+              at: https://static.javadoc.io/org.apache.commons/commons-csv/1.7/org/apache/commons/csv/CSVFormat.Predefined.html
+    - Google Pub/Sub (Avro not supported)
+        - **pubsubTopic**: Cloud Pub/Sub input topic to read data from, in the format of '
+          projects/yourproject/topics/yourtopic'
+- An output sink from the supported options:
+    - Google Cloud Storage
+        - **outputGcsDirectory**: GCS bucket folder to write data to
+        - **outputGcsFileFormat**: File format of output files. Supported formats: JSON, CSV, Avro
+        - **windowDuration**: The window duration in which data will be written. Should be specified
+          only for 'Pub/Sub -> GCS' case. Defaults to 30s.
+
+          Supported format:
+            - Ns (for seconds, example: 5s),
+            - Nm (for minutes, example: 12m),
+            - Nh (for hours, example: 2h).
+        - Google Cloud BigQuery
+            - **bigQueryTableName**: Cloud BigQuery table name to write into
+    - Cloud Bigtable
+        - **bigTableProjectId**: Project ID containing Cloud Bigtable instance to write into
+        - **bigTableInstanceId**: Cloud BigTable Instance ID of the Bigtable instance to write into
+        - **bigTableTableId**: ID of the Cloud Bigtable table to write into
+        - **bigTableKeyColumnName**: Column name to use as a key in Cloud Bigtable
+        - **bigTableColumnFamilyName**: Column family name to use in Cloud Bigtable
+- DSG parameters
+    - **dsgUri**: URI for the DSG API calls
+    - **batchSize**: Size of the data batch to send to DSG per request
+    - **payloadConfigGcsPath**: GCS path to the payload configuration file with an array of fields
+      to extract for tokenization
+
+The template allows user to supply the following optional parameter:
+
+- **nonTokenizedDeadLetterGcsPath**: GCS folder where failed to tokenize data will be stored
+</details>
+
+
+A Dataflow job can be created and executed from this template in 3 ways:
+
+1. Using [Dataflow Google Cloud Console](https://console.cloud.google.com/dataflow/jobs)
+
+// TODO add screenshots from console 
+
+2. Using `gcloud` CLI tool
+    ```bash
+    gcloud dataflow flex-template run "protegrity-data-tokenization-`date +%Y%m%d-%H%M%S`" \
+        --template-file-gcs-location "${TEMPLATE_PATH}" \
+        --parameters <parameter>="<value>" \
+        --parameters <parameter>="<value>" \
+        ...
+        --parameters <parameter>="<value>" \
+        --region "${REGION}"
+    ```
+3. With a REST API request
+    ```
+    API_ROOT_URL="https://dataflow.googleapis.com"
+    TEMPLATES_LAUNCH_API="${API_ROOT_URL}/v1b3/projects/${PROJECT}/locations/${REGION}/flexTemplates:launch"
+    JOB_NAME="protegrity-data-tokenization-`date +%Y%m%d-%H%M%S-%N`"
+    
+    time curl -X POST -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+        -d '
+         {
+             "launch_parameter": {
+                 "jobName": "'$JOB_NAME'",
+                 "containerSpecGcsPath": "'$TEMPLATE_PATH'",
+                 "parameters": {
+                     "<parameter>": "<value>",
+                     "<parameter>": "<value>",
+                     ...
+                     "<parameter>": "<value>"
+                 }
+             }
+         }
+        '
+        "${TEMPLATES_LAUNCH_API}"
+    ```
 
 <!-- ------------------------ -->
 ## Contribute to DataflowTemplates
