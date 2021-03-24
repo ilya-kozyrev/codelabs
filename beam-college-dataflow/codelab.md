@@ -32,10 +32,12 @@ Through this codelab, you'll understand how to work with Beam Schema API and how
 * A computer with a modern web browser installed (Chrome is recommended)
 * Text editor
 * A Google account
-* Git installed to your computer
+
+Next step: Environment Setup
+
 <!-- ------------------------ -->
-## Environment Setup
-Duration: 0:15:00
+## Environment setup
+Duration: 0:05:00
 
 #### Install Java Environment
 
