@@ -4,11 +4,10 @@ id: data-flow-templates-new-source-schema-api
 categories: Dataflow,Beam,GCP,Dataflow Template
 environments: Web
 status: Draft
-feedback link:https://github.com/akvelon/DataflowTemplates/tree/BeamRowDemo/v2/protegrity-data-tokenization
-analytics account: 
+feedback link:https://github.com/ilya-kozyrev/codelabs
 
 # Add new input source to the Dataflow Template using Beam Schema API
-
+<!-- ------------------------ -->
 ## Introduction
 Duration: 0:05:00
 
@@ -34,8 +33,7 @@ Through this codelab, you'll understand how to work with Beam Schema API and how
 * Text editor
 * A Google account
 * Git installed to your computer
-
-
+<!-- ------------------------ -->
 ## Environment Setup
 Duration: 0:15:00
 
@@ -66,6 +64,7 @@ $ git clone https://github.com/akvelon/DataflowTemplates.git
 $ git checkout ProtegrityIntegrationTemplate
 ```
 
+<!-- ------------------------ -->
 ## Project overview
 Duration: 0:05:00
 
@@ -78,7 +77,7 @@ Go to the template folder DataflowTemplates/v2/protegrity-data-tokenization
 
 In the target folder you might see the template packages. Let's go through each of them.
 
-![image_caption](https://i.ibb.co/TRpGHY5/Screenshot-2021-03-23-at-16-39-21.png")
+![image_caption](resources/Screenshot-2021-03-23-at-16-39-21.png)
 * `options` package contains all pipeline parameters and logic around them
 * `templates` package contains main class of presented template. There is pipeline creation and applying all transformations
 * `transforms` package contains all Beam transform that applies to the pipeline
@@ -88,7 +87,7 @@ In the target folder you might see the template packages. Let's go through each 
 * `resources` folder contains metadata file, that will be need when you will build pipeline to the template.
 
 As a next step you will go throughout the main class.
-
+<!-- ------------------------ -->
 ## Main template class
 Duration: 0:15:00
 
@@ -148,7 +147,7 @@ coderRegistry
 ```
 
 Next step: You will take a look at schema in BigQuery compatible format.
-
+<!-- ------------------------ -->
 ## Schema from Json
 Duration: 0:15:00
 
@@ -190,7 +189,7 @@ Each object should contains three attributes
 * `type` Type of the field, in BigQuery [types](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types?hl=pl). Likely it's very closely with Beam schema Type. All Beam types supports with BigQuery
 * `mode` Might be `REQUIRED` or `NULLABLE`
 
-### Schema parsing
+#### Schema parsing
 
 To parse schema you need to implement parsing from JSON string using `BigQueryHelpers.fromJsonString()`
 
@@ -208,7 +207,7 @@ And convert ```TableSchema``` to Beam `Schema` using `org.apache.beam.sdk.io.gcp
 You may see how it implements in presented pipeline `v2/protegrity-data-tokenization/src/main/java/com/google/cloud/teleport/v2/utils/SchemasUtils.java` class
 
 Nex step: IO transform overview
-
+<!-- ------------------------ -->
 ## GcsIO overview
 Duration: 0:10:00
 
@@ -266,7 +265,7 @@ from Beam Row to destination format for writing results. e.g. `writeJson` or `re
 That takes pipeline and Schema as argument.
 
 Next step: You will implement parquet files reading and writing and transformation this into the Beam Row.
-
+<!-- ------------------------ -->
 ## Parquet IO Read
 Duration: 0:15:00
 
@@ -322,26 +321,33 @@ private PCollection<Row> readParquet(Pipeline pipeline, Schema beamSchema) {
         .setCoder(RowCoder.of(beamSchema));
  }
 ```
-
+<!-- ------------------------ -->
 
 ## Parquet IO Write
 Duration: 0:15:00
 
+pass
 
 
+<!-- ------------------------ -->
 ## Build the Template
 Duration: 0:05:00
 
+pass
 
-
+<!-- ------------------------ -->
 ## Run the Template
 Duration: 0:05:00
 
+pass
 
-
+<!-- ------------------------ -->
 ## Contribute to DataflowTemplates
 Duration: 0:05:00
 
-
+pass
+<!-- ------------------------ -->
 ## Finish
 Duration: 0:05:00
+
+pass
