@@ -1,7 +1,6 @@
 <!-- ------------------------ -->
 ## Generate HTML
 
-
 We will use claat (Codelabs as a Thing) to generate HTML files from our Markdown file.
 To avoid installing `Go`, I made a light docker image to use claat.
 
