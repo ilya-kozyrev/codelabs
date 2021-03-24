@@ -31,7 +31,7 @@ Through this codelab, you'll understand how to work with Beam Schema API and how
 
 #### What you'll need
 * A computer with a modern web browser installed (Chrome is recommended)
-* Text editor
+* Your favourite code editor or IDE
 * A Google account
 
 Next step: Environment Setup
@@ -51,7 +51,7 @@ In order to work with Beam Java SDK you need *Java 1.8*, *mvn* (the java command
 
 
 #### Install Git
-The instructions below are what worked for me on Mac, but you can also find instructions [here](https://git-scm.com/download/)
+The instructions below are what worked for Mac, but you can also find instructions [here](https://git-scm.com/download/)
 
 ```bash
 $ brew install git
@@ -71,10 +71,9 @@ $ git checkout ProtegrityIntegrationTemplate
 ## Project overview
 Duration: 0:05:00
 
-In your cloned  repository folder you might see `src` and `v2` folders. There are classic 
-templates contains in `src` folder and Flex templates contains in `v2` folder.
+In your cloned  repository folder you might see `src` and `v2` folders. src and v2 folders contain classic and Flex templates correspondingly.
 
-In this codelab you will work with flex templates. 
+In this codelab you will work with Flex templates. 
 
 Go to the template folder DataflowTemplates/v2/protegrity-data-tokenization
 
@@ -264,7 +263,7 @@ public POutput write(PCollection<Row> input, Schema schema) {
 ```
 
 For each supported format GcsIO encapsulates transformations from source format to Beam Row and 
-from Beam Row to destination format for writing results. e.g. `writeJson` or `readJson`. 
+from Beam Row to destination format for writing results. e.g. `writeAvro` or `writeAvro`. 
 That takes pipeline and Schema as argument.
 
 Next step: You will implement parquet files reading and writing and transformation this into the Beam Row.
@@ -283,7 +282,7 @@ public enum FORMAT {
   }
 ```
 
-Next you need to create method for read parquet from filesystem and convert it into Beam Row.
+Next, you need to create a method to read parquet from the filesystem and convert it into Beam Row.
 
 To read parquet you might use ParquetIO from Beam SDK. You need to apply `ParquetIO.read()` to the pipeline object.
 ```java
@@ -299,15 +298,16 @@ org.apache.avro.Schema avroSchema = AvroUtils.toAvroSchema(beamSchema);
 
 Applying `ParquetIO.read()` to the pipeline produce `PCollection` of `GenericRecord` and you should 
 convert it into the Beam Row. Easiest way to do that is applying `MapElements.into` to the 
-`PCollection<GenericRecord>`. One thing that you need to catch - transform function from 
-`GenericRecord` into `Row`. And likely it also contains in `AvroUtils`.
+`PCollection<GenericRecord>`. One thing that you need to provide to `via` method - transform 
+function from `GenericRecord` into `Row`. And luckily it also contains in `AvroUtils`.
 
 ```java
 parquetRecords
     .apply("GenericRecordsToRow", MapElements.into(TypeDescriptor.of(Row.class))
         .via(AvroUtils.getGenericRecordToRowFunction(beamSchema)))
 ```
-The last thing that you need to do - specifying the coder for the new PCollection. 
+
+The last thing that you need to do - specify the coder for the new PCollection. 
 A fully implemented method: 
 
 
@@ -324,20 +324,172 @@ private PCollection<Row> readParquet(Pipeline pipeline, Schema beamSchema) {
         .setCoder(RowCoder.of(beamSchema));
  }
 ```
+
+Next step: you need to implement write method for writing Beam Row to the parquet format.
 <!-- ------------------------ -->
 
 ## Parquet IO Write
 Duration: 0:15:00
 
-pass
+Let's implement write method for parquet format.
 
+You need to create a method to transform Beam Row to parquet and write files to filesystem.
+
+To write parquet you might use `FileIO` with `ParquetIO.sink()` from Beam SDK. 
+You need to apply `FileIO.<GenericRecord>write()` to the `PCollection<GenericRecord>`.
+
+Firstly you need to convert `PCollection<Row>` into `PCollection<GenericRecord>`. 
+It's very similar with your implementation of conversion from GenericRecord to Row. For backward
+conversion you might use `MapElements` with `AvroUtils.getRowToGenericRecordFunction()`
+```java
+PCollection<GenericRecord> genericRecords = outputCollection
+     .apply(
+        "RowToGenericRecord", MapElements.into(TypeDescriptor.of(GenericRecord.class))
+            .via(AvroUtils.getRowToGenericRecordFunction(avroSchema)))
+```
+
+As you may see, `getRowToGenericRecordFunction` takes Avro Schema. You should convert Beam Schema to
+the Avro schema using `AvroUtils`
+
+```
+org.apache.avro.Schema avroSchema = AvroUtils.toAvroSchema(beamSchema);
+```
+
+So, now, you have prepared `PCollection<GenericRecord>` and you may apply `FileIO.write()` to it.
+It requires Generic type specifying.
+
+```java
+genericRecords.apply(FileIO.<GenericRecord>write()
+    .via(ParquetIO.sink(avroSchema))
+    .to(options.getOutputGcsDirectory()).withSuffix(".parquet")
+```
+As the argument to `ParquetIO.sink()` you should pass `avroSchema`, that you converted before from 
+Beam Schema. Destination path, you may take from the pipeline options.
+
+Next step: You will take a look on metadata file and extend it for parquet format.
+
+<!-- ------------------------ -->
+## Template metadata
+Duration: 0:05:00
+
+For the building Dataflow Template, you should create JSON file with Template metadata. 
+
+#### Metadata parameters
+| Parameter Key	 | Required | Description of the value |
+| --- | ----------- | --- |
+| name | Yes | The name of your template. |
+| description | No | A short paragraph of text describing the templates. |
+| parameters | No. Defaults to an empty array. | An array of additional parameters that will be used by the template. |
+
+#### Template parameters description in metadata file
+| Parameter Key	 | Required | Description of the value |
+| --- | ----------- | --- |
+| name | Yes | 	The name of the parameter used in your template. |
+| label | Yes | A human readable label that will be used in the UI to label the parameter. |
+| helpText | Yes | A short paragraph of text describing the parameter. |
+| isOptional | No. Defaults to false. | *false* if the parameter is required and *true* if the parameter is optional. |
+| regexes | No. Defaults to an empty array. | An array of POSIX-egrep regular expressions in string form that will be used to validate the value of the parameter. For example: `["^[a-zA-Z][a-zA-Z0-9]+"]` is a single regular expression that validates that the value starts with a letter and then has one or more characters. |
+
+#### Example metadata file
+```json
+{
+  "description": "An example pipeline that counts words in the input file.",
+  "name": "Word Count",
+  "parameters": [
+    {
+      "regexes": [
+        "^gs:\\/\\/[^\\n\\r]+$"
+      ],
+      "name": "inputFile",
+      "helpText": "Path of the file pattern glob to read from. ex: gs://dataflow-samples/shakespeare/kinglear.txt",
+      "label": "Input Cloud Storage file(s)"
+    },
+    {
+      "regexes": [
+        "^gs:\\/\\/[^\\n\\r]+$"
+      ],
+      "name": "output",
+      "helpText": "Path and filename prefix for writing output files. ex: gs://MyBucket/counts",
+      "label": "Output Cloud Storage file(s)"
+    }
+  ]
+}
+```
+
+#### Add PARQUET to supported formats in Metadata file
+
+In the metadata file, located: `v2/protegrity-data-tokenization/src/main/resources/protegrity_data_tokenization_metadata.json` 
+you may see following parameters:
+* inputGcsFileFormat
+* outputGcsFileFormat
+
+For these parameters you should add addition option in regex section to validate PARQUET format correctly
+
+```json
+"regexes": [
+        "^(JSON|CSV|AVRO|PARQUET)$"
+]
+```
+
+Next step: you will build pipeline into the template.
 
 <!-- ------------------------ -->
 ## Build the Template
 Duration: 0:05:00
 
-pass
+Dataflow Flex Templates package the pipeline as a Docker image and stage these images on your
+project's [Container Registry](https://cloud.google.com/container-registry).
 
+#### Assembling the Uber-JAR
+
+The Dataflow Flex Templates require your Java project to be built into an Uber JAR file.
+
+Navigate to the v2 folder:
+
+```
+cd /path/to/DataflowTemplates/v2
+```
+
+Build the Uber JAR:
+
+```
+mvn package -am -pl protegrity-data-tokenization
+```
+
+ℹ️ An **Uber JAR** - also known as **fat JAR** - is a single JAR file that contains both target
+package *and* all its dependencies.
+
+The result of the `package` task execution is a `protegrity-data-tokenization-1.0-SNAPSHOT.jar`
+file that is generated under the `target` folder protegrity-data-tokenization directory.
+
+#### Creating the Dataflow Flex Template
+
+Navigate to the template folder:
+
+```
+cd /path/to/DataflowTemplates/v2/protegrity-data-tokenization
+```
+
+Build command to build the Dataflow Flex Template:
+
+```
+gcloud dataflow flex-template build ${TEMPLATE_PATH} \
+       --image-gcr-path "${TARGET_GCR_IMAGE}" \
+       --sdk-language "JAVA" \
+       --flex-template-base-image ${BASE_CONTAINER_IMAGE} \
+       --metadata-file "src/main/resources/protegrity_data_tokenization_metadata.json" \
+       --jar "target/protegrity-data-tokenization-1.0-SNAPSHOT.jar" \
+       --env FLEX_TEMPLATE_JAVA_MAIN_CLASS="com.google.cloud.teleport.v2.templates.ProtegrityDataTokenization"
+```
+* `TEMPLATE_PATH` path on GCS where manifest for template will be located.
+* `image-gcr-path` path in GCR, should be in format  `gcr.io/${PROJECT}/${IMAGE_NAME}`
+* `sdk-language` might be Java or Python
+* `flex-template-base-image` You must use a Google-provided [base image](https://docs.docker.com/glossary/#base_image) to package your containers using Docker. Choose the most recent version name from the [Flex Templates base images reference](https://cloud.google.com/dataflow/docs/reference/flex-templates-base-images). Do not select *latest*.
+* `metadata-file` path to metadata file in this case: ``v2/protegrity-data-tokenization/src/main/resources/protegrity_data_tokenization_metadata.json``
+* `jar` path to **UBER JAR** 
+* `FLEX_TEMPLATE_JAVA_MAIN_CLASS` path to the main class. In this case: `com.google.cloud.teleport.v2.templates.ProtegrityDataTokenization`
+
+Next step: You will run Dataflow Template on GCS!
 <!-- ------------------------ -->
 ## Run the Template
 Duration: 0:05:00
